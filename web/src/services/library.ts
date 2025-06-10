@@ -8,6 +8,7 @@ export interface Library {
   id: number;
   name: string;
   user_id: number;
+  source: string;
   created_at: string;
   updated_at: string;
 }
@@ -66,6 +67,20 @@ class LibraryService {
       });
       return response.data;
     } catch (error) {
+      throw error;
+    }
+  }
+
+  // Delete a library by ID
+  async deleteLibrary(id: number): Promise<{ message: string }> {
+    try {
+      // Ensure id is a number and convert to string for URL
+      const libraryId = Number(id).toString();
+      console.log('Deleting library with ID:', libraryId);
+      const response = await axios.delete<{ message: string }>(`${API_URL}/libraries/${libraryId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error in deleteLibrary service:', error);
       throw error;
     }
   }

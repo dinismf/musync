@@ -55,6 +55,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			library.GET("/:id", musicLibraryHandler.GetLibrary)
 			library.GET("/:id/tracks", musicLibraryHandler.GetTracks)
 			library.GET("/:id/playlists", musicLibraryHandler.GetPlaylists)
+			library.DELETE("/:id", musicLibraryHandler.DeleteLibrary)
 		}
 
 		// Playlist routes

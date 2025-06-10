@@ -14,6 +14,10 @@ const LibraryPage: React.FC = () => {
   const [uploading, setUploading] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<boolean>(false);
 
   useEffect(() => {
     // Check if user is authenticated
@@ -59,7 +63,7 @@ const LibraryPage: React.FC = () => {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!uploadFile) {
       setUploadError('Please select a file to upload');
       return;
@@ -74,18 +78,18 @@ const LibraryPage: React.FC = () => {
       setUploading(true);
       setUploadError(null);
       setUploadSuccess(false);
-      
+
       // Convert file to base64
       const base64Data = await libraryService.fileToBase64(uploadFile);
-      
+
       // Upload library
       await libraryService.uploadLibrary(uploadName, base64Data);
-      
+
       // Reset form
       setUploadName('');
       setUploadFile(null);
       setUploadSuccess(true);
-      
+
       // Refresh libraries
       fetchLibraries();
     } catch (err: any) {
@@ -99,16 +103,54 @@ const LibraryPage: React.FC = () => {
     navigate(`/library/${id}`);
   };
 
+  const handleDeleteClick = (id: number) => {
+    console.log('Delete clicked for library ID:', id);
+    // Ensure id is a number
+    setDeleteConfirmation(Number(id));
+    setDeleteError(null);
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmation(null);
+  };
+
+  const handleConfirmDelete = async (id: number) => {
+    try {
+      setDeleting(true);
+      setDeleteError(null);
+
+      console.log('Confirming delete for library ID:', id);
+
+      // Delete the library
+      await libraryService.deleteLibrary(id);
+
+      // Remove the library from the state
+      setLibraries(libraries.filter(lib => lib.id !== id));
+      setDeleteSuccess(true);
+
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setDeleteSuccess(false);
+      }, 3000);
+    } catch (err: any) {
+      console.error('Error deleting library:', err);
+      setDeleteError(err.response?.data?.error || 'Failed to delete library');
+    } finally {
+      setDeleting(false);
+      setDeleteConfirmation(null);
+    }
+  };
+
   return (
     <div className="library-container">
       <div className="library-content">
         <h1>Music Libraries</h1>
-        
+
         <div className="upload-section">
           <h2>Upload New Library</h2>
           {uploadError && <div className="error-message">{uploadError}</div>}
           {uploadSuccess && <div className="success-message">Library uploaded successfully!</div>}
-          
+
           <form onSubmit={handleUpload}>
             <div className="form-group">
               <label htmlFor="name">Library Name</label>
@@ -120,7 +162,7 @@ const LibraryPage: React.FC = () => {
                 required
               />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="file">XML File</label>
               <input
@@ -132,16 +174,19 @@ const LibraryPage: React.FC = () => {
               />
               {uploadFile && <p className="file-name">Selected: {uploadFile.name}</p>}
             </div>
-            
+
             <button type="submit" disabled={uploading}>
               {uploading ? 'Uploading...' : 'Upload Library'}
             </button>
           </form>
         </div>
-        
+
         <div className="libraries-section">
           <h2>Your Libraries</h2>
-          
+
+          {deleteSuccess && <div className="success-message">Library deleted successfully!</div>}
+          {deleteError && <div className="error-message">{deleteError}</div>}
+
           {loading ? (
             <p>Loading libraries...</p>
           ) : error ? (
@@ -154,15 +199,51 @@ const LibraryPage: React.FC = () => {
                 <div key={library.id} className="library-card">
                   <h3>{library.name}</h3>
                   <p>Created: {new Date(library.created_at).toLocaleDateString()}</p>
-                  <button onClick={() => handleViewLibrary(library.id)}>
-                    View Library
-                  </button>
+                  <div className="library-actions">
+                    <button onClick={() => handleViewLibrary(library.id)}>
+                      View Library
+                    </button>
+                    <button 
+                      onClick={() => {
+                        console.log('Delete button clicked for library:', library);
+                        handleDeleteClick(library.id);
+                      }}
+                      className="delete-button"
+                    >
+                      Delete Library
+                    </button>
+                  </div>
+
+                  {deleteConfirmation !== null && deleteConfirmation === library.id && (
+                    <div className="delete-confirmation">
+                      <p>Are you sure you want to delete this library? This will also delete all tracks and playlists associated with it.</p>
+                      <div className="confirmation-buttons">
+                        <button 
+                          onClick={() => {
+                            console.log('Confirm delete clicked for library:', library);
+                            handleConfirmDelete(library.id);
+                          }}
+                          disabled={deleting}
+                          className="confirm-button"
+                        >
+                          {deleting ? 'Deleting...' : 'Yes, Delete'}
+                        </button>
+                        <button 
+                          onClick={handleCancelDelete}
+                          disabled={deleting}
+                          className="cancel-button"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
-        
+
         <div className="navigation-buttons">
           <button onClick={() => navigate('/')}>Home</button>
           <button onClick={() => navigate('/profile')}>Profile</button>

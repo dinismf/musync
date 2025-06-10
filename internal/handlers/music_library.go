@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dinis/musync/internal/database"
+	"github.com/dinis/musync/internal/dto"
 	"github.com/dinis/musync/internal/services"
 	"github.com/gin-gonic/gin"
 )
@@ -99,7 +100,9 @@ func (h *MusicLibraryHandler) GetLibraries(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, libraries)
+	// Convert to response DTOs
+	libraryResponses := dto.ToLibraryResponses(libraries)
+	c.JSON(http.StatusOK, libraryResponses)
 }
 
 // GetLibrary returns a specific music library
@@ -125,7 +128,9 @@ func (h *MusicLibraryHandler) GetLibrary(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, library)
+	// Convert to response DTO
+	libraryResponse := dto.ToLibraryResponse(*library)
+	c.JSON(http.StatusOK, libraryResponse)
 }
 
 // GetTracks returns all tracks in a library
@@ -151,7 +156,9 @@ func (h *MusicLibraryHandler) GetTracks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, tracks)
+	// Convert to response DTOs
+	trackResponses := dto.ToTrackResponses(tracks)
+	c.JSON(http.StatusOK, trackResponses)
 }
 
 // GetPlaylists returns all playlists in a library
@@ -177,7 +184,9 @@ func (h *MusicLibraryHandler) GetPlaylists(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, playlists)
+	// Convert to response DTOs
+	playlistResponses := dto.ToPlaylistResponses(playlists)
+	c.JSON(http.StatusOK, playlistResponses)
 }
 
 // GetPlaylistTracks returns all tracks in a playlist
@@ -203,7 +212,9 @@ func (h *MusicLibraryHandler) GetPlaylistTracks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, tracks)
+	// Convert to response DTOs
+	trackResponses := dto.ToTrackResponses(tracks)
+	c.JSON(http.StatusOK, trackResponses)
 }
 
 // StreamTrack streams a track's audio file
@@ -242,4 +253,30 @@ func (h *MusicLibraryHandler) StreamTrack(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
+}
+
+// DeleteLibrary handles the deletion of a music library and all its associated resources
+func (h *MusicLibraryHandler) DeleteLibrary(c *gin.Context) {
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Get library ID from URL
+	libraryID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid library ID"})
+		return
+	}
+
+	// Delete the library
+	err = h.libraryService.DeleteLibrary(c.Request.Context(), userID.(uint), uint(libraryID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete library: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Library deleted successfully"})
 }

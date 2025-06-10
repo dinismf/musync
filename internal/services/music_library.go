@@ -247,6 +247,61 @@ func (s *MusicLibraryService) GetPlaylistTracks(ctx context.Context, userID, pla
 	return tracks, nil
 }
 
+// DeleteLibrary deletes a library and all its associated tracks, playlists, and playlist tracks
+func (s *MusicLibraryService) DeleteLibrary(ctx context.Context, userID, libraryID uint) error {
+	// First check if the library belongs to the user
+	library, err := s.GetLibrary(ctx, userID, libraryID)
+	if err != nil {
+		return err
+	}
+
+	// Begin a transaction
+	return s.db.Transaction(ctx, func(tx *database.DB) error {
+		// Get all playlists in this library
+		var playlists []models.Playlist
+		if err := tx.Where(ctx, "library_id = ?", libraryID).Find(ctx, &playlists); err != nil {
+			return err
+		}
+
+		// Delete all playlist tracks for each playlist
+		for _, playlist := range playlists {
+			if err := tx.Where(ctx, "playlist_id = ?", playlist.ID).Delete(ctx, &models.PlaylistTrack{}); err != nil {
+				return err
+			}
+		}
+
+		// Delete all playlists in this library
+		if err := tx.Where(ctx, "library_id = ?", libraryID).Delete(ctx, &models.Playlist{}); err != nil {
+			return err
+		}
+
+		// Get all tracks in this library
+		var tracks []models.Track
+		if err := tx.Where(ctx, "library_id = ?", libraryID).Find(ctx, &tracks); err != nil {
+			return err
+		}
+
+		// Delete all tempo markers for each track
+		for _, track := range tracks {
+			if err := tx.Where(ctx, "track_id = ?", track.ID).Delete(ctx, &models.Tempo{}); err != nil {
+				return err
+			}
+		}
+
+		// Delete all tracks in this library
+		if err := tx.Where(ctx, "library_id = ?", libraryID).Delete(ctx, &models.Track{}); err != nil {
+			return err
+		}
+
+		// Finally, delete the library itself
+		if err := tx.Delete(ctx, library); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
 // Helper functions
 
 // convertRekordboxTrack converts a RekordboxTrack to a Track model

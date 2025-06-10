@@ -146,3 +146,63 @@ button:disabled {
 .navigation-buttons button {
   flex: 1;
 }
+
+/* Styles for library actions */
+.library-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.library-actions button {
+  flex: 1;
+}
+
+.delete-button {
+  background-color: #e53935 !important;
+}
+
+.delete-button:hover {
+  background-color: #c62828 !important;
+}
+
+/* Styles for delete confirmation */
+.delete-confirmation {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #fff3e0;
+  border-radius: 4px;
+  border-left: 4px solid #ff9800;
+}
+
+.delete-confirmation p {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 14px;
+}
+
+.confirmation-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.confirmation-buttons button {
+  flex: 1;
+}
+
+.confirm-button {
+  background-color: #e53935 !important;
+}
+
+.confirm-button:hover {
+  background-color: #c62828 !important;
+}
+
+.cancel-button {
+  background-color: #757575 !important;
+}
+
+.cancel-button:hover {
+  background-color: #616161 !important;
+}
