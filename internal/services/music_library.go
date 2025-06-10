@@ -255,7 +255,7 @@ func (s *MusicLibraryService) DeleteLibrary(ctx context.Context, userID, library
 		return err
 	}
 
-	// Begin a transaction
+	// Begin a transaction with unscoped operations (hard delete)
 	return s.db.Transaction(ctx, func(tx *database.DB) error {
 		// Get all playlists in this library
 		var playlists []models.Playlist

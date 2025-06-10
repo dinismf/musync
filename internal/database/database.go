@@ -15,7 +15,8 @@ import (
 // DB is a wrapper around gorm.DB that provides context support
 type DB struct {
 	*gorm.DB
-	ctx context.Context
+	ctx      context.Context
+	unscoped bool
 }
 
 var GlobalDB *DB
@@ -61,7 +62,7 @@ func InitDB(cfg config.DatabaseConfig) *DB {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
-	dbWrapper := &DB{DB: db, ctx: context.Background()}
+	dbWrapper := &DB{DB: db, ctx: context.Background(), unscoped: false}
 	GlobalDB = dbWrapper // Set global DB instance for backward compatibility
 	log.Println("Database connection established and migrations completed")
 	return dbWrapper
@@ -69,7 +70,12 @@ func InitDB(cfg config.DatabaseConfig) *DB {
 
 // WithContext returns a new DB instance with the given context
 func (db *DB) WithContext(ctx context.Context) *DB {
-	return &DB{DB: db.DB.WithContext(ctx), ctx: ctx}
+	return &DB{DB: db.DB.WithContext(ctx), ctx: ctx, unscoped: db.unscoped}
+}
+
+// Unscoped returns a new DB instance that will perform unscoped operations (e.g., hard deletes)
+func (db *DB) Unscoped() *DB {
+	return &DB{DB: db.DB, ctx: db.ctx, unscoped: true}
 }
 
 // Create creates a new record with context support
@@ -133,7 +139,12 @@ func (db *DB) SaveWithoutContext(value interface{}) error {
 
 // Delete deletes a record with context support
 func (db *DB) Delete(ctx context.Context, value interface{}, conds ...interface{}) error {
-	result := db.WithContext(ctx).DB.Delete(value, conds...)
+	var result *gorm.DB
+	if db.unscoped {
+		result = db.WithContext(ctx).DB.Unscoped().Delete(value, conds...)
+	} else {
+		result = db.WithContext(ctx).DB.Delete(value, conds...)
+	}
 	if result.Error != nil {
 		return errors.Wrap(result.Error, "failed to delete record")
 	}
@@ -147,7 +158,7 @@ func (db *DB) DeleteWithoutContext(value interface{}, conds ...interface{}) erro
 
 // Where adds a where condition to the query with context support
 func (db *DB) Where(ctx context.Context, query interface{}, args ...interface{}) *DB {
-	return &DB{DB: db.WithContext(ctx).DB.Where(query, args...), ctx: ctx}
+	return &DB{DB: db.WithContext(ctx).DB.Where(query, args...), ctx: ctx, unscoped: db.unscoped}
 }
 
 // WhereWithoutContext adds a where condition to the query using the stored context
@@ -158,6 +169,6 @@ func (db *DB) WhereWithoutContext(query interface{}, args ...interface{}) *DB {
 // Transaction starts a transaction with context support
 func (db *DB) Transaction(ctx context.Context, fn func(tx *DB) error) error {
 	return db.WithContext(ctx).DB.Transaction(func(tx *gorm.DB) error {
-		return fn(&DB{DB: tx})
+		return fn(&DB{DB: tx, unscoped: db.unscoped})
 	})
 }
