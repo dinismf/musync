@@ -13,6 +13,12 @@ import (
 	"github.com/dinis/musync/internal/models"
 )
 
+// ReadSeekCloser combines io.ReadSeeker and io.Closer interfaces
+type ReadSeekCloser interface {
+	io.ReadSeeker
+	io.Closer
+}
+
 // FileStorageService handles operations related to file storage and retrieval
 type FileStorageService struct {
 	db *database.DB
@@ -25,43 +31,59 @@ func NewFileStorageService(db *database.DB) *FileStorageService {
 	}
 }
 
-// GetFileStream returns a reader for a track's file
-func (s *FileStorageService) GetFileStream(ctx context.Context, userID, trackID uint) (io.ReadCloser, string, error) {
+// GetTrackInfo returns information about a track
+func (s *FileStorageService) GetTrackInfo(ctx context.Context, userID, trackID uint) (*models.Track, error) {
 	// Get the track
 	var track models.Track
 	if err := s.db.First(ctx, &track, trackID); err != nil {
-		return nil, "", errors.New("track not found")
+		return nil, errors.New("track not found")
 	}
 
 	// Check if the track belongs to a library owned by the user
 	var library models.MusicLibrary
 	if err := s.db.First(ctx, &library, track.LibraryID); err != nil {
-		return nil, "", errors.New("library not found")
+		return nil, errors.New("library not found")
 	}
 
 	if library.UserID != userID {
-		return nil, "", errors.New("unauthorized access to track")
+		return nil, errors.New("unauthorized access to track")
 	}
 
-	// Parse the location to determine the source
-	location := track.Location
-	contentType := s.getContentTypeFromLocation(location)
+	return &track, nil
+}
 
-	// Handle different storage sources
-	if strings.HasPrefix(location, "file://localhost") {
-		// Local file
-		return s.getLocalFileStream(location)
-	} else if strings.HasPrefix(location, "pcloud://") {
-		// pCloud file
-		return s.getPCloudFileStream(location)
-	} else {
-		// Unsupported source
-		return nil, contentType, errors.New("unsupported file location")
+// GetFileStream returns a reader for a track's file
+func (s *FileStorageService) GetFileStream(ctx context.Context, userID, trackID uint) (ReadSeekCloser, string, error) {
+	// Get the track info
+	track, err := s.GetTrackInfo(ctx, userID, trackID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Get content type based on file extension
+	contentType := s.getContentTypeFromLocation(track.Location)
+
+	// Handle different storage types
+	switch track.StorageType {
+	case "local":
+		// Local file - check if it's a valid local path
+		if strings.HasPrefix(track.Location, "/Users/") {
+			return s.getLocalFileStream(track.Location)
+		}
+		return nil, contentType, errors.New("invalid local file path")
+	case "cloud":
+		// Cloud file - determine the provider from the location
+		if strings.HasPrefix(track.Location, "pcloud://") {
+			return s.getPCloudFileStream(track.Location)
+		}
+		return nil, contentType, errors.New("unsupported cloud provider")
+	default:
+		return nil, contentType, errors.New("unsupported storage type")
 	}
 }
 
 // getLocalFileStream returns a reader for a local file
-func (s *FileStorageService) getLocalFileStream(location string) (io.ReadCloser, string, error) {
+func (s *FileStorageService) getLocalFileStream(location string) (ReadSeekCloser, string, error) {
 	// Remove the file:// prefix and decode URL
 	path := strings.TrimPrefix(location, "file://localhost")
 	path, err := url.PathUnescape(path)
@@ -80,7 +102,7 @@ func (s *FileStorageService) getLocalFileStream(location string) (io.ReadCloser,
 }
 
 // getPCloudFileStream returns a reader for a pCloud file
-func (s *FileStorageService) getPCloudFileStream(location string) (io.ReadCloser, string, error) {
+func (s *FileStorageService) getPCloudFileStream(location string) (ReadSeekCloser, string, error) {
 	// In a real implementation, this would use the pCloud API to get a download link
 	// and then return a reader for that link
 	// For now, we'll just return an error

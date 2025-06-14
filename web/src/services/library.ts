@@ -24,6 +24,18 @@ export interface Track {
   year: number | null;
   created_at: string;
   updated_at: string;
+  storage_type?: 'local' | 'cloud' | 'stream_url';
+  location_path?: string;
+}
+
+export interface Playlist {
+  id: number;
+  library_id: number;
+  name: string;
+  type: number;
+  parent_id?: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // Create the library service
@@ -81,6 +93,46 @@ class LibraryService {
       return response.data;
     } catch (error) {
       console.error('Error in deleteLibrary service:', error);
+      throw error;
+    }
+  }
+
+  // Get all playlists in a library
+  async getPlaylists(libraryId: number): Promise<Playlist[]> {
+    try {
+      const response = await axios.get<Playlist[]>(`${API_URL}/libraries/${libraryId}/playlists`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Get all tracks in a playlist
+  async getPlaylistTracks(playlistId: number): Promise<Track[]> {
+    try {
+      const response = await axios.get<Track[]>(`${API_URL}/playlists/${playlistId}/tracks`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Get the streaming URL for a track
+  async getTrackStreamUrl(trackId: number): Promise<string> {
+    try {
+      // Always stream through the backend for all files to avoid browser security restrictions
+      const streamResponse = await axios.get(`${API_URL}/tracks/${trackId}/stream`, {
+        responseType: 'blob'
+      });
+
+      // Create a blob URL from the response data
+      const contentType = streamResponse.headers['content-type'] || 'audio/mpeg';
+      const audioBlob = new Blob([streamResponse.data], { type: contentType });
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      return audioUrl;
+    } catch (error) {
+      console.error('Error fetching track stream:', error);
       throw error;
     }
   }

@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -217,7 +219,7 @@ func (h *MusicLibraryHandler) GetPlaylistTracks(c *gin.Context) {
 	c.JSON(http.StatusOK, trackResponses)
 }
 
-// StreamTrack streams a track's audio file
+// StreamTrack streams a track's audio file or returns track information for local files
 func (h *MusicLibraryHandler) StreamTrack(c *gin.Context) {
 	// Get user ID from context
 	userID, exists := c.Get("user_id")
@@ -233,7 +235,8 @@ func (h *MusicLibraryHandler) StreamTrack(c *gin.Context) {
 		return
 	}
 
-	// Get file stream
+	// Stream the file through the backend
+	// This ensures compatibility with web browsers that can't access local files directly
 	fileStream, contentType, err := h.fileService.GetFileStream(c.Request.Context(), userID.(uint), uint(trackID))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Failed to get track: " + err.Error()})
@@ -244,8 +247,69 @@ func (h *MusicLibraryHandler) StreamTrack(c *gin.Context) {
 	// Set content type header
 	c.Header("Content-Type", contentType)
 
+	// Add headers to enable seeking and other audio controls
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "GET, OPTIONS")
+	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+
+	// Check if this is a range request
+	rangeHeader := c.Request.Header.Get("Range")
+	if rangeHeader != "" {
+		// Parse the range header
+		rangeStr := strings.Replace(rangeHeader, "bytes=", "", 1)
+		rangeParts := strings.Split(rangeStr, "-")
+
+		// Get the start position
+		startPos, err := strconv.ParseInt(rangeParts[0], 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid range header"})
+			return
+		}
+
+		// Get file size
+		fileInfo, err := fileStream.(interface{ Stat() (os.FileInfo, error) }).Stat()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get file info"})
+			return
+		}
+		fileSize := fileInfo.Size()
+
+		// Calculate end position
+		endPos := fileSize - 1
+		if len(rangeParts) > 1 && rangeParts[1] != "" {
+			endPos, err = strconv.ParseInt(rangeParts[1], 10, 64)
+			if err != nil {
+				endPos = fileSize - 1
+			}
+		}
+
+		// Ensure endPos is not greater than fileSize
+		if endPos >= fileSize {
+			endPos = fileSize - 1
+		}
+
+		// Calculate content length
+		contentLength := endPos - startPos + 1
+
+		// Seek to the requested position
+		_, err = fileStream.Seek(startPos, io.SeekStart)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to seek to position"})
+			return
+		}
+
+		// Set headers for partial content
+		c.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", startPos, endPos, fileSize))
+		c.Header("Content-Length", fmt.Sprintf("%d", contentLength))
+		c.Status(http.StatusPartialContent)
+	} else {
+		// Full content request
+		c.Status(http.StatusOK)
+	}
+
 	// Stream the file
-	c.Status(http.StatusOK)
 	_, err = io.Copy(c.Writer, fileStream)
 	if err != nil {
 		// The response has already started, so we can't return a JSON error

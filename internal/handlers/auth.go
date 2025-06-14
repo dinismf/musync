@@ -6,6 +6,7 @@ import (
 
 	"github.com/dinis/musync/internal/config"
 	"github.com/dinis/musync/internal/database"
+	"github.com/dinis/musync/internal/dto"
 	"github.com/dinis/musync/internal/services"
 	"github.com/gin-gonic/gin"
 )
@@ -48,27 +49,27 @@ type SetPasswordRequest struct {
 func (h *AuthHandler) SignUp(c *gin.Context) {
 	var req SignUpRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(err.Error()))
 		return
 	}
 
 	err := h.authService.SignUp(c.Request.Context(), req.Email, req.Username)
 	if err != nil {
 		if err == services.ErrUserAlreadyExists {
-			c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
+			c.JSON(http.StatusConflict, dto.NewErrorResponse("User already exists"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("Failed to create user"))
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully. Please check your email for verification and to set your password."})
+	c.JSON(http.StatusCreated, dto.NewAuthResponse("User created successfully. Please check your email for verification and to set your password."))
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(err.Error()))
 		return
 	}
 
@@ -76,24 +77,24 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case services.ErrInvalidCredentials:
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+			c.JSON(http.StatusUnauthorized, dto.NewErrorResponse("Invalid credentials"))
 		case services.ErrEmailNotVerified:
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Please verify your email first"})
+			c.JSON(http.StatusUnauthorized, dto.NewErrorResponse("Please verify your email first"))
 		case services.ErrPasswordNotSet:
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Please set your password first"})
+			c.JSON(http.StatusUnauthorized, dto.NewErrorResponse("Please set your password first"))
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to login"})
+			c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("Failed to login"))
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	c.JSON(http.StatusOK, dto.NewTokenResponse(token))
 }
 
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	code := c.Query("code")
 	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Verification code is required"})
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse("Verification code is required"))
 		return
 	}
 
@@ -101,39 +102,39 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrVerificationCodeRequired):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Verification code is required"})
+			c.JSON(http.StatusBadRequest, dto.NewErrorResponse("Verification code is required"))
 		case errors.Is(err, services.ErrInvalidVerificationCode):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid verification code"})
+			c.JSON(http.StatusBadRequest, dto.NewErrorResponse("Invalid verification code"))
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify email"})
+			c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("Failed to verify email"))
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully"})
+	c.JSON(http.StatusOK, dto.NewAuthResponse("Email verified successfully"))
 }
 
 func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(err.Error()))
 		return
 	}
 
 	err := h.authService.RequestPasswordReset(c.Request.Context(), req.Email)
 	if err != nil {
 		// Don't reveal if the error is because the user doesn't exist
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process reset request"})
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("Failed to process reset request"))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "If your email is registered, you will receive a password reset link"})
+	c.JSON(http.StatusOK, dto.NewAuthResponse("If your email is registered, you will receive a password reset link"))
 }
 
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req ConfirmResetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(err.Error()))
 		return
 	}
 
@@ -141,21 +142,21 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInvalidResetCode):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired reset code"})
+			c.JSON(http.StatusBadRequest, dto.NewErrorResponse("Invalid or expired reset code"))
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset password"})
+			c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("Failed to reset password"))
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
+	c.JSON(http.StatusOK, dto.NewAuthResponse("Password reset successfully"))
 }
 
 // SetPassword handles setting a password during email verification
 func (h *AuthHandler) SetPassword(c *gin.Context) {
 	var req SetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(err.Error()))
 		return
 	}
 
@@ -163,12 +164,12 @@ func (h *AuthHandler) SetPassword(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInvalidVerificationCode):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid verification code"})
+			c.JSON(http.StatusBadRequest, dto.NewErrorResponse("Invalid verification code"))
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set password"})
+			c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("Failed to set password"))
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Password set successfully. You can now log in."})
+	c.JSON(http.StatusOK, dto.NewAuthResponse("Password set successfully. You can now log in."))
 }

@@ -18,16 +18,18 @@ type LibraryResponse struct {
 
 // TrackResponse represents the response structure for a track
 type TrackResponse struct {
-	ID        uint      `json:"id"`
-	LibraryID uint      `json:"library_id"`
-	Name      string    `json:"title"`
-	Artist    string    `json:"artist"`
-	Album     string    `json:"album"`
-	Genre     string    `json:"genre"`
-	TotalTime int       `json:"duration"`
-	Year      int       `json:"year"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          uint      `json:"id"`
+	LibraryID   uint      `json:"library_id"`
+	Name        string    `json:"title"`
+	Artist      string    `json:"artist"`
+	Album       string    `json:"album"`
+	Genre       string    `json:"genre"`
+	TotalTime   int       `json:"duration"`
+	Year        int       `json:"year"`
+	Location    string    `json:"location,omitempty"`
+	StorageType string    `json:"storage_type"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // PlaylistResponse represents the response structure for a playlist
@@ -65,16 +67,18 @@ func ToLibraryResponses(libraries []models.MusicLibrary) []LibraryResponse {
 // ToTrackResponse converts a Track model to a TrackResponse DTO
 func ToTrackResponse(track models.Track) TrackResponse {
 	return TrackResponse{
-		ID:        track.ID,
-		LibraryID: track.LibraryID,
-		Name:      track.Name,
-		Artist:    track.Artist,
-		Album:     track.Album,
-		Genre:     track.Genre,
-		TotalTime: track.TotalTime,
-		Year:      track.Year,
-		CreatedAt: track.CreatedAt,
-		UpdatedAt: track.UpdatedAt,
+		ID:          track.ID,
+		LibraryID:   track.LibraryID,
+		Name:        track.Name,
+		Artist:      track.Artist,
+		Album:       track.Album,
+		Genre:       track.Genre,
+		TotalTime:   track.TotalTime,
+		Year:        track.Year,
+		Location:    track.Location,
+		StorageType: track.StorageType,
+		CreatedAt:   track.CreatedAt,
+		UpdatedAt:   track.UpdatedAt,
 	}
 }
 

@@ -44,7 +44,8 @@ type Track struct {
 	Comments    string
 	PlayCount   int
 	Rating      int
-	Location    string `gorm:"not null"` // File path or URL
+	Location    string `gorm:"not null"`                 // File path or URL
+	StorageType string `gorm:"not null;default:'local'"` // Storage type: "local" or "cloud"
 	Remixer     string
 	Tonality    string // Musical key
 	Label       string

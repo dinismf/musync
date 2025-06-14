@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
 import Profile from './pages/Profile';
 import LibraryPage from './pages/Library';
+import LibraryView from './pages/LibraryView';
 
 // Components
 import PrivateRoute from './components/PrivateRoute';
@@ -35,6 +36,14 @@ function App() {
             element={
               <PrivateRoute>
                 <LibraryPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/library/:id" 
+            element={
+              <PrivateRoute>
+                <LibraryView />
               </PrivateRoute>
             } 
           />
