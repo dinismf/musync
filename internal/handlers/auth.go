@@ -55,7 +55,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 
 	err := h.authService.SignUp(c.Request.Context(), req.Email, req.Username)
 	if err != nil {
-		if err == services.ErrUserAlreadyExists {
+		if errors.Is(err, services.ErrUserAlreadyExists) {
 			c.JSON(http.StatusConflict, dto.NewErrorResponse("User already exists"))
 			return
 		}
@@ -75,12 +75,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	token, err := h.authService.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
-		switch err {
-		case services.ErrInvalidCredentials:
+		switch {
+		case errors.Is(err, services.ErrInvalidCredentials):
 			c.JSON(http.StatusUnauthorized, dto.NewErrorResponse("Invalid credentials"))
-		case services.ErrEmailNotVerified:
+		case errors.Is(err, services.ErrEmailNotVerified):
 			c.JSON(http.StatusUnauthorized, dto.NewErrorResponse("Please verify your email first"))
-		case services.ErrPasswordNotSet:
+		case errors.Is(err, services.ErrPasswordNotSet):
 			c.JSON(http.StatusUnauthorized, dto.NewErrorResponse("Please set your password first"))
 		default:
 			c.JSON(http.StatusInternalServerError, dto.NewErrorResponse("Failed to login"))

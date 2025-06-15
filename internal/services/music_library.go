@@ -88,13 +88,15 @@ type RekordboxPlaylistTrack struct {
 
 // MusicLibraryService handles operations related to music libraries
 type MusicLibraryService struct {
-	db *database.DB
+	db          *database.DB
+	fileStorage *FileStorageService
 }
 
 // NewMusicLibraryService creates a new MusicLibraryService
 func NewMusicLibraryService(db *database.DB) *MusicLibraryService {
 	return &MusicLibraryService{
-		db: db,
+		db:          db,
+		fileStorage: NewFileStorageService(db),
 	}
 }
 
@@ -198,6 +200,12 @@ func (s *MusicLibraryService) GetTracks(ctx context.Context, userID, libraryID u
 	if err := s.db.Where(ctx, "library_id = ?", libraryID).Find(ctx, &tracks); err != nil {
 		return nil, err
 	}
+
+	// Normalize track locations for frontend compatibility
+	for i := range tracks {
+		tracks[i].Location = s.fileStorage.NormalizeTrackLocation(tracks[i].Location)
+	}
+
 	return tracks, nil
 }
 
@@ -241,6 +249,10 @@ func (s *MusicLibraryService) GetPlaylistTracks(ctx context.Context, userID, pla
 		if err := s.db.Where(ctx, "library_id = ? AND track_id = ?", playlist.LibraryID, pt.TrackKey).First(ctx, &track); err != nil {
 			continue // Skip tracks that can't be found
 		}
+
+		// Normalize track location for frontend compatibility
+		track.Location = s.fileStorage.NormalizeTrackLocation(track.Location)
+
 		tracks = append(tracks, track)
 	}
 
