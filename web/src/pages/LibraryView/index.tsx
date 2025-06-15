@@ -4,6 +4,7 @@ import libraryService, { Library, Track, Playlist } from '../../services/library
 import AudioPlayer, { RHAP_UI } from 'react-h5-audio-player';
 import 'react-h5-audio-player/lib/styles.css';
 import './LibraryView.css';
+import { FaFolder, FaList, FaChevronRight, FaChevronDown } from 'react-icons/fa';
 
 const LibraryView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +20,10 @@ const LibraryView: React.FC = () => {
   const [selectedPlaylist, setSelectedPlaylist] = useState<number | null>(null);
   const [playlistTracks, setPlaylistTracks] = useState<Track[]>([]);
   const [loadingPlaylist, setLoadingPlaylist] = useState<boolean>(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
+  const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
+  const [folderTracks, setFolderTracks] = useState<Track[]>([]);
+  const [loadingFolder, setLoadingFolder] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [volume, setVolume] = useState<number>(1);
@@ -106,7 +111,38 @@ const LibraryView: React.FC = () => {
   };
 
 
-  const handleSelectPlaylist = async (playlistId: number) => {
+  const handleSelectPlaylist = async (playlistId: number, playlistType: number) => {
+    // If it's a folder (type 0)
+    if (playlistType === 0) {
+      // Toggle expansion
+      toggleFolderExpansion(playlistId);
+
+      // Handle folder selection for viewing all tracks
+      if (selectedFolder === playlistId) {
+        // Deselect folder
+        setSelectedFolder(null);
+        setFolderTracks([]);
+      } else {
+        try {
+          // Clear any selected playlist
+          setSelectedPlaylist(null);
+          setPlaylistTracks([]);
+
+          // Load all tracks from the folder
+          setLoadingFolder(true);
+          const tracks = await libraryService.getFolderTracks(playlistId);
+          setFolderTracks(tracks);
+          setSelectedFolder(playlistId);
+        } catch (err: any) {
+          setError(err.response?.data?.error || 'Failed to load folder tracks');
+        } finally {
+          setLoadingFolder(false);
+        }
+      }
+      return;
+    }
+
+    // Otherwise it's a playlist (type 1)
     if (selectedPlaylist === playlistId) {
       // Deselect playlist
       setSelectedPlaylist(null);
@@ -115,6 +151,11 @@ const LibraryView: React.FC = () => {
     }
 
     try {
+      // Clear any selected folder
+      setSelectedFolder(null);
+      setFolderTracks([]);
+
+      // Load playlist tracks
       setLoadingPlaylist(true);
       const tracks = await libraryService.getPlaylistTracks(playlistId);
       setPlaylistTracks(tracks);
@@ -124,6 +165,78 @@ const LibraryView: React.FC = () => {
     } finally {
       setLoadingPlaylist(false);
     }
+  };
+
+  // Toggle folder expansion
+  const toggleFolderExpansion = (folderId: number) => {
+    setExpandedFolders(prevExpanded => {
+      const newExpanded = new Set(prevExpanded);
+      if (newExpanded.has(folderId)) {
+        newExpanded.delete(folderId);
+      } else {
+        newExpanded.add(folderId);
+      }
+      return newExpanded;
+    });
+  };
+
+  // Organize playlists into a hierarchical structure
+  const organizePlaylistsHierarchy = (playlists: Playlist[]) => {
+    // Create a map of parent IDs to child playlists
+    const playlistMap: Record<string, Playlist[]> = {};
+
+    // Initialize with an empty array for root playlists (null parent)
+    playlistMap['null'] = [];
+
+    // Group playlists by parent ID
+    playlists.forEach(playlist => {
+      const parentKey = playlist.parent_id ? playlist.parent_id.toString() : 'null';
+      if (!playlistMap[parentKey]) {
+        playlistMap[parentKey] = [];
+      }
+      playlistMap[parentKey].push(playlist);
+    });
+
+    return playlistMap;
+  };
+
+  // Render a playlist item (folder or regular playlist)
+  const renderPlaylistItem = (playlist: Playlist, level: number = 0) => {
+    const isFolder = playlist.type === 0;
+    const isExpanded = expandedFolders.has(playlist.id);
+    const hasChildren = playlists.some(p => p.parent_id === playlist.id);
+    const isSelected = isFolder ? selectedFolder === playlist.id : selectedPlaylist === playlist.id;
+
+    return (
+      <React.Fragment key={playlist.id}>
+        <li 
+          className={`playlist-item ${isSelected ? 'selected' : ''} ${isFolder ? 'folder' : 'playlist'}`}
+          onClick={() => handleSelectPlaylist(playlist.id, playlist.type)}
+          style={{ paddingLeft: `${level * 20 + 10}px` }}
+        >
+          {isFolder && hasChildren && (
+            <span className="folder-icon">
+              {isExpanded ? <FaChevronDown /> : <FaChevronRight />}
+            </span>
+          )}
+          <span className="item-icon">
+            {isFolder ? <FaFolder /> : <FaList />}
+          </span>
+          <span className="item-name">{playlist.name}</span>
+        </li>
+
+        {/* Render children if this is an expanded folder */}
+        {isFolder && isExpanded && hasChildren && 
+          renderPlaylistChildren(playlist.id, level + 1)
+        }
+      </React.Fragment>
+    );
+  };
+
+  // Render children of a folder
+  const renderPlaylistChildren = (parentId: number, level: number) => {
+    const children = playlists.filter(p => p.parent_id === parentId);
+    return children.map(child => renderPlaylistItem(child, level));
   };
 
   const formatDuration = (seconds: number): string => {
@@ -232,16 +345,11 @@ const LibraryView: React.FC = () => {
               {playlists.length === 0 ? (
                 <p className="no-items">No playlists found in this library.</p>
               ) : (
-                <ul>
-                  {playlists.map((playlist) => (
-                    <li 
-                      key={playlist.id} 
-                      className={selectedPlaylist === playlist.id ? 'selected' : ''}
-                      onClick={() => handleSelectPlaylist(playlist.id)}
-                    >
-                      {playlist.name}
-                    </li>
-                  ))}
+                <ul className="hierarchical-playlists">
+                  {/* Render root level playlists (those with no parent) */}
+                  {playlists
+                    .filter(playlist => playlist.parent_id === null || playlist.parent_id === undefined)
+                    .map(playlist => renderPlaylistItem(playlist))}
                 </ul>
               )}
             </div>
@@ -300,6 +408,67 @@ const LibraryView: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
+                )}
+              </div>
+            )}
+
+            {selectedFolder && (
+              <div className="folder-tracks">
+                <h3>All Tracks in Folder</h3>
+                {loadingFolder ? (
+                  <p>Loading folder tracks...</p>
+                ) : folderTracks.length === 0 ? (
+                  <p className="no-items">No tracks in this folder or its subfolders.</p>
+                ) : (
+                  <div>
+                    <p className="folder-tracks-info">Showing all tracks from all playlists in this folder and its subfolders.</p>
+                    <table className="tracks-table">
+                      <thead>
+                        <tr>
+                          <th></th>
+                          <th>Title</th>
+                          <th>Artist</th>
+                          <th>Album</th>
+                          <th>Duration</th>
+                          <th>Storage</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {folderTracks.map((track) => (
+                          <tr 
+                            key={track.id} 
+                            className={currentTrack?.id === track.id ? 'playing' : ''}
+                            onClick={() => handlePlayTrack(track)}
+                          >
+                            <td>
+                              {currentTrack?.id === track.id && isLoadingTrack ? (
+                                <span className="loading-icon">⏳</span>
+                              ) : currentTrack?.id === track.id && isPlaying ? (
+                                <span className="playing-icon">▶️</span>
+                              ) : (
+                                <span className="play-icon">▶</span>
+                              )}
+                            </td>
+                            <td>{track.title}</td>
+                            <td>{track.artist}</td>
+                            <td>{track.album}</td>
+                            <td>{formatDuration(track.duration)}</td>
+                            <td>
+                              {track.storage_type === 'local' ? (
+                                <span className="storage-icon local-storage" title="Stored locally">💻 Local</span>
+                              ) : track.storage_type === 'cloud' ? (
+                                <span className="storage-icon cloud-storage" title="Stored in cloud">☁️ Cloud</span>
+                              ) : track.storage_type === 'stream_url' ? (
+                                <span className="storage-icon stream-url" title="Direct stream URL">🔗 Stream</span>
+                              ) : (
+                                <span className="storage-icon unknown-storage" title="Unknown storage location">❓ Unknown</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}

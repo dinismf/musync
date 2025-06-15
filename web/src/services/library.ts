@@ -117,6 +117,16 @@ class LibraryService {
     }
   }
 
+  // Get all tracks in all playlists within a folder (recursively)
+  async getFolderTracks(folderId: number): Promise<Track[]> {
+    try {
+      const response = await axios.get<Track[]>(`${API_URL}/folders/${folderId}/tracks`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Get the streaming URL for a track
   async getTrackStreamUrl(trackId: number): Promise<string> {
     try {

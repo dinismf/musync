@@ -64,6 +64,12 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			playlist.GET("/:id/tracks", musicLibraryHandler.GetPlaylistTracks)
 		}
 
+		// Folder routes
+		folder := protected.Group("/folders")
+		{
+			folder.GET("/:id/tracks", musicLibraryHandler.GetFolderTracks)
+		}
+
 		// Track routes
 		track := protected.Group("/tracks")
 		{

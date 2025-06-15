@@ -247,6 +247,70 @@ func (s *MusicLibraryService) GetPlaylistTracks(ctx context.Context, userID, pla
 	return tracks, nil
 }
 
+// GetFolderTracks returns all tracks in all playlists within a folder (recursively)
+func (s *MusicLibraryService) GetFolderTracks(ctx context.Context, userID, folderID uint) ([]models.Track, error) {
+	// First get the folder
+	var folder models.Playlist
+	if err := s.db.First(ctx, &folder, folderID); err != nil {
+		return nil, err
+	}
+
+	// Check if it's actually a folder
+	if folder.Type != 0 {
+		return nil, errors.New("specified ID is not a folder")
+	}
+
+	// Check if the library belongs to the user
+	if _, err := s.GetLibrary(ctx, userID, folder.LibraryID); err != nil {
+		return nil, err
+	}
+
+	// Get all playlists and subfolders within this folder
+	var childPlaylists []models.Playlist
+	if err := s.db.Where(ctx, "parent_id = ?", folderID).Find(ctx, &childPlaylists); err != nil {
+		return nil, err
+	}
+
+	// Initialize a map to track unique tracks (to avoid duplicates)
+	trackMap := make(map[uint]models.Track)
+
+	// Process each child
+	for _, child := range childPlaylists {
+		var childTracks []models.Track
+
+		if child.Type == 0 {
+			// If it's a subfolder, recursively get its tracks
+			subfolderTracks, err := s.GetFolderTracks(ctx, userID, child.ID)
+			if err != nil {
+				// Log the error but continue with other playlists
+				continue
+			}
+			childTracks = subfolderTracks
+		} else {
+			// If it's a playlist, get its tracks
+			playlistTracks, err := s.GetPlaylistTracks(ctx, userID, child.ID)
+			if err != nil {
+				// Log the error but continue with other playlists
+				continue
+			}
+			childTracks = playlistTracks
+		}
+
+		// Add tracks to the map (to ensure uniqueness)
+		for _, track := range childTracks {
+			trackMap[track.ID] = track
+		}
+	}
+
+	// Convert the map to a slice
+	tracks := make([]models.Track, 0, len(trackMap))
+	for _, track := range trackMap {
+		tracks = append(tracks, track)
+	}
+
+	return tracks, nil
+}
+
 // DeleteLibrary deletes a library and all its associated tracks, playlists, and playlist tracks
 func (s *MusicLibraryService) DeleteLibrary(ctx context.Context, userID, libraryID uint) error {
 	// First check if the library belongs to the user

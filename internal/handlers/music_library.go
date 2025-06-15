@@ -219,6 +219,38 @@ func (h *MusicLibraryHandler) GetPlaylistTracks(c *gin.Context) {
 	c.JSON(http.StatusOK, trackResponses)
 }
 
+// GetFolderTracks returns all tracks in all playlists within a folder (recursively)
+func (h *MusicLibraryHandler) GetFolderTracks(c *gin.Context) {
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Get folder ID from URL
+	folderID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid folder ID"})
+		return
+	}
+
+	// Get tracks
+	tracks, err := h.libraryService.GetFolderTracks(c.Request.Context(), userID.(uint), uint(folderID))
+	if err != nil {
+		if err.Error() == "specified ID is not a folder" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "Folder not found"})
+		return
+	}
+
+	// Convert to response DTOs
+	trackResponses := dto.ToTrackResponses(tracks)
+	c.JSON(http.StatusOK, trackResponses)
+}
+
 // StreamTrack streams a track's audio file or returns track information for local files
 func (h *MusicLibraryHandler) StreamTrack(c *gin.Context) {
 	// Get user ID from context
